@@ -15,7 +15,7 @@ def generate_noise(size, scale=1.0, octaves=1, persistence=0.5, lacunarity=2.0, 
     :param lacunarity: Frequency increase for each octave.
     :return: 2D numpy array of noise values.
     """
-    noise_array = np.zeros((size, size), dtype=np.float32)
+    noise_array = np.zeros((size, size), dtype=np.uint8)
     for x in range(size):
         for y in range(size):
             noise_value = snoise2(
@@ -28,7 +28,7 @@ def generate_noise(size, scale=1.0, octaves=1, persistence=0.5, lacunarity=2.0, 
                 repeaty=size,
                 base=seed
             )
-            noise_array[x, y] = noise_value
+            noise_array[x, y] = int((noise_value + 1.0) * 127.5)  # Scale to [0, 255]
     return noise_array
 
 def generate_stacked_rgba_noise(size):
@@ -44,7 +44,7 @@ def generate_stacked_rgba_noise(size):
     lacunarity = 2.0
 
     depth = 5000
-    stacked_noise = np.zeros((4, depth, size, size), dtype=np.float32)
+    stacked_noise = np.zeros((4, depth, size, size), dtype=np.uint8)
     status = ["\\", "|", "/", "-"]
     
     for d in range(depth):
@@ -65,12 +65,10 @@ def generate_stacked_rgba_noise(size):
 
 def export_stacked_rgba_noise(stacked_rgba_noise):
     # Normalize from [-1,1] to [0,1] then to [0,255]
-    normalized = np.clip((stacked_rgba_noise + 1.0) * 0.5, 0, 1)
-    uint8_data = (normalized * 255).astype(np.uint8)
-    
-    with open("stacked_rgba_noise.bin", 'wb') as f:
-        uint8_data.tofile(f)
+    with open("stacked_rgba_noise.tex.bin", 'wb') as f:
+        stacked_rgba_noise.tofile(f)
     print("Stacked RGBA noise array saved to stacked_rgba_noise.bin")
+
 
 def load_stacked_rgba_noise(filepath):
     """
@@ -96,9 +94,9 @@ def load_stacked_rgba_noise(filepath):
         raise ValueError(f"File size mismatch. Expected {expected_size}, got {len(noise_array)}")
     
     # Reshape to (height, width, depth, channels)
-    noise_array4 = noise_array.reshape((size, size, depth, num_channels))
+    stacked_noise = noise_array.reshape((size, size, depth, num_channels))
     
-    return noise_array4
+    return stacked_noise
 
 def export_stacked_rgba_noise_to_png(stacked_rgba_noise, prefix="stacked_noise"):
     """
@@ -111,18 +109,10 @@ def export_stacked_rgba_noise_to_png(stacked_rgba_noise, prefix="stacked_noise")
     for i in range(10):
         print(f"RGBA value at (0, 0, {i}): {stacked_rgba_noise[0, 0, i, :]}")
     print("")
-    
-    normalized_rgba_noise = np.clip((stacked_rgba_noise + 1.0) * 0.5, 0, 1)
-    # Print first 10 normalized rgba values
-    for i in range(10):
-        print(f"Normalized RGBA value at (0, 0, {i}): {normalized_rgba_noise[0, 0, i, :]}")
 
     for i in range(0, 10, 1):  # Iterate over depth
-        rgba_image = (normalized_rgba_noise[:, :, i, :] * 255).astype(np.uint8)  # Convert to uint8
-        rgba_image[:, :, 0] = (normalized_rgba_noise[:, :, i, 0] * 255).astype(np.uint8)  # Red channel
-        rgba_image[:, :, 1] = (normalized_rgba_noise[:, :, i, 1] * 255).astype(np.uint8)  # Green channel
-        rgba_image[:, :, 2] = (normalized_rgba_noise[:, :, i, 2] * 255).astype(np.uint8)  # Blue channel
-        rgba_image[:, :, 3] = (normalized_rgba_noise[:, :, i, 3] * 255).astype(np.uint8)  # Alpha channel
+        rgba_image = stacked_rgba_noise[:, :, i, :]
+
         
         plt.imsave(f"rgba_noise_channels/{prefix}_depth_{i}.png", rgba_image, format='png')
         print(f"Saved {prefix}_depth_{i}.png")
@@ -140,4 +130,5 @@ if __name__ == "__main__":
     export_stacked_rgba_noise(stacked)
     loaded_stacked = load_stacked_rgba_noise("stacked_rgba_noise.bin")
     print("Loaded stacked RGBA noise shape:", loaded_stacked.shape)
+    export_stacked_rgba_noise_to_png(loaded_stacked, "loaded_stacked_noise")
     #export_stacked_rgba_noise_to_png(loaded_stacked, "stacked_noise")
